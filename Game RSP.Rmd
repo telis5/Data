@@ -2,7 +2,7 @@
 title: "Game RSP"
 author: "Irina Telina"
 date: '2 сент€бр€ 2017 г '
-output: html_document
+output: md_document
 ---
 
 ```{r setup, include=FALSE}
