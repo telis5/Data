@@ -1,0 +1,153 @@
+---
+title: "Game RSP"
+author: "Irina Telina"
+date: '2 сентября 2017 г '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Игра на бумаге
+
+Получение данных:
+
+```{r }
+d <- read.csv(file = "https://raw.githubusercontent.com/telis5/Data/master/dataRSP.csv", header = TRUE ) 
+d$Session <- as.factor(d$Session)
+```
+
+1. Как часто выбирались определенные стратегии:
+
+```{r }
+table(d$User)
+```
+
+2. Как часто выбирались стратегии определенными игроками:
+
+```{r }
+table(d$User, d$Session)
+```
+
+3. Отличался ли выбор игроков от равномерного:
+
+```{r}
+chisq.test(x = table(d$User))
+```
+
+Полученная вероятность p-value = `r chisq.test(x = table(d$User))$p.value` больше критического уровня значимости (0.05), и мы не можем отвергнуть нулевую гипотезу о том, что выбор игроков не отличается от равномерного.
+
+4. Повторяет ли игрок свою стратегию при победе:
+
+```{r echo=FALSE, warning=FALSE}
+repRSP <- function(data, gain=1, player="User"){
+    choice1 <- factor(x=c(), levels=c("p", "r", "s"), labels = c("p", "r", "s"))
+    choice0 <- choice1
+    k <- 1
+    for(i in 1:(nrow(data)-1)){
+      if (data[i,"Win"] == gain){
+          choice0[k] <- data[i,player]
+           choice1[k] <- data[i+1,player]
+            k <- k + 1
+      }
+    }
+    x <- data.frame(choice0, choice1, res=rep(0, length(choice0))) # предыдущий и текущий выборы
+    x
+    for(i in 1:nrow(x)){
+      if (x[i,]$choice0 == x[i,]$choice1){
+           x[i,]$res <- 1
+        }
+    }
+    return(sum(x$res)) 
+}
+t <- rbind.data.frame(c(repRSP(d, gain = 1), nrow(d)-1-repRSP(d, gain = 1)), 
+                      c(repRSP(d, gain = 0), nrow(d)-1-repRSP(d, gain = 0)), 
+                      c(repRSP(d, gain = -1), nrow(d)-1-repRSP(d, gain = -1)))
+colnames(t) <- c("Repeat", "Change")
+row.names(t) <- c("Win=+1", "Win= 0", "Win=-1")
+t
+```
+
+Для проверки гипотезы об отсутствии связи между результатом игры и повторением стратегии используем критерий согласия Пирсона (хи-квадрат).
+
+```{r}
+chisq.test(t)
+```
+
+Вычислим критическое значение хи-квадрат:
+```{r}
+qchisq(p = 0.95, df = 2)
+```
+
+Полученное значение `r chisq.test(t)$statistic` меньше критического значения `r qchisq(p = 0.95, df = 2)`, поэтому отклонить гипотезу мы не можем. При выигрыше игроки повторяли свои стратегии не чаще, чем при другом исходе игры.
+
+## Игра с программой
+
+Получение данных:
+
+```{r warning=FALSE}
+df <- read.table("https://raw.githubusercontent.com/telis5/Data/master/data_fromMA.txt")
+d <- as.data.frame(t(df))
+```
+```{r echo=FALSE}
+names(d) <- c("User", "AI")
+row.names(d) <- c()
+d$Win <- rep(0, nrow(d))
+for (i in 1:nrow(d)){
+    if((d[i,]$User == "p" & d[i,]$AI == "r") |
+       (d[i,]$User == "r" & d[i,]$AI == "s") |
+       (d[i,]$User == "s" & d[i,]$AI == "p")){
+            d[i,]$Win <- 1
+    } else if((d[i,]$User == "s" & d[i,]$AI == "r") |
+              (d[i,]$User == "p" & d[i,]$AI == "s") |
+              (d[i,]$User == "r" & d[i,]$AI == "p")) {
+                    d[i,]$Win <- -1
+    }
+}
+```
+
+1. Как часто выбирались определенные стратегии:
+
+```{r }
+table(d$User)
+```
+
+2. Как часто программа выбирала определенные стратегии:
+
+```{r }
+table(d$AI)
+```
+
+3. Отличался ли выбор стратегий от равномерного:
+
+```{r}
+chisq.test(x = table(d$User))
+```
+
+Критическое значение хи-квадрат для df = 2  равно `r qchisq(p = 0.95, df = 2)`, что меньше полученного значения критерия: `r chisq.test(table(d$User))$statistic`. Это позволяет нам отклонить гипотезу о том, что выбор игроков был случайным с одинаковой вероятностью.   
+Значение критерия согласия Пирсона не позволяет отклонить гипотезу о том, что выбор программы не отличается от равномерного:
+
+```{r}
+chisq.test(x = table(d$AI))
+```
+
+4. Повторяет ли игрок свою стратегию при победе:
+
+```{r echo=FALSE, warning=FALSE}
+t <- rbind.data.frame(c(repRSP(d, gain = 1), nrow(d)-1-repRSP(d, gain = 1)), 
+                      c(repRSP(d, gain = 0), nrow(d)-1-repRSP(d, gain = 0)), 
+                      c(repRSP(d, gain = -1), nrow(d)-1-repRSP(d, gain = -1)))
+colnames(t) <- c("Repeat", "Change")
+row.names(t) <- c("Win=+1", "Win= 0", "Win=-1")
+t
+```
+
+Проверим гипотезу об отсутствии связи между результатом игры и повторением стратегии с помощью критерия согласия Пирсона.
+
+```{r}
+chisq.test(t)
+```
+
+Полученное значение `r chisq.test(t)$statistic` меньше критического значения `r qchisq(p = 0.95, df = 2)`, поэтому отклонить гипотезу мы не можем. При выигрыше игроки повторяли свои стратегии не чаще, чем при другом исходе игры.
+
